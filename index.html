@@ -1,88 +1,215 @@
-<!DOCTYPE html>
-<html lang="pl">
+<html lang="en">
 <head>
-    <meta charset="UTF-8">
-    <title>Kręcący się obrazek</title>
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-
-    <style>
-        body { 
-            display: flex; 
-            justify-content: center; 
-            align-items: center; 
-            height: 100vh; 
-            margin: 0; 
-            background-color: #1a1a1a;
-            flex-direction: column;
-            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
-        }
-
-        #przycisk {
-            padding: 20px 40px;
-            font-size: 20px;
-            font-weight: bold;
-            cursor: pointer;
-            background-color: #e74c3c;
-            color: white;
-            border: none;
-            border-radius: 50px;
-            box-shadow: 0 4px 15px rgba(0,0,0,0.3);
-            transition: transform 0.2s, background-color 0.2s;
-        }
-
-        #przycisk:hover {
-            background-color: #ff5e4d;
-            transform: scale(1.05);
-        }
-
-        @keyframes spin {
-            from { transform: rotate(0deg); }
-            to { transform: rotate(360deg); }
-        }
-
-        #mojObraz {
-            display: none;
-            width: 250px;
-            height: auto;
-            border-radius: 10px;
-            animation: spin 2s linear infinite;
-        }
-    </style>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Spinning Swastika</title>
+<style>
+body {
+display: flex;
+justify-content: center;
+align-items: center;
+height: 100vh;
+margin: 0;
+background-color: #1a1a1a;
+flex-direction: column;
+font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+position: relative;
+overflow: hidden;
+color: white;
+}
+#przycisk {
+padding: 20px 40px;
+font-size: 20px;
+font-weight: bold;
+cursor: pointer;
+background-color: #e74c3c;
+color: white;
+border: none;
+border-radius: 50px;
+box-shadow: 0 4px 15px rgba(0,0,0,0.3);
+transition: transform 0.2s, background-color 0.2s;
+z-index: 10;
+margin-bottom: 40px;
+}
+#przycisk:hover {
+background-color: #ff5e4d;
+transform: scale(1.05);
+}
+#controls {
+display: none;
+flex-direction: column;
+align-items: center;
+gap: 15px;
+z-index: 10;
+margin-top: 30px;
+}
+label {
+font-size: 18px;
+}
+input[type="range"] {
+width: 320px;
+accent-color: #e74c3c;
+}
+#speedValue {
+font-size: 22px;
+font-weight: bold;
+}
+@keyframes spin {
+from { transform: rotate(0deg); }
+to { transform: rotate(360deg); }
+}
+#swastika {
+width: 280px;
+height: auto;
+display: none;
+z-index: 5;
+filter: drop-shadow(0 0 12px rgba(255,255,255,0.4));
+}
+#particleCanvas {
+position: absolute;
+inset: 0;
+width: 100%;
+height: 100%;
+z-index: 1;
+pointer-events: none;
+}
+</style>
 </head>
 <body>
-
-    <button id="przycisk">Czy na pewno wyświetlić obraz?</button>
-    
-    <img id="mojObraz" 
-         src="https://encrypted-tbn0.gstatic.com/images?q=tbn:ANd9GcQ-lEgumwRSXkcKkpFs2j8pgav4VLLIvvWDYw&s" 
-         alt="Kręcący się obrazek">
-
-    <audio id="mojaMuzyka"
-           src="https://raw.githubusercontent.com/enderlifex/swastikawebsite/main/erika.mp3"
-           loop>
-    </audio>
-
+<button id="przycisk">Are you sure you want to show it?</button>
+<img id="swastika" src="https://github.com/enderlifex/swastikawebsite/raw/main/Nazi_swastika_clean.svg.png" alt="Spinning swastika">
+<audio id="mojaMuzyka" src="https://raw.githubusercontent.com/enderlifex/swastikawebsite/main/erika.mp3" loop></audio>
+<div id="controls">
+<input type="range" id="speedSlider" min="1" max="1000" value="1">
+<div><span id="speedValue">1</span> ×</div>
+</div>
+<canvas id="particleCanvas"></canvas>
     <script>
-        const przycisk = document.getElementById("przycisk");
-        const obraz = document.getElementById("mojObraz");
+        // Constants and element references
+        const btn = document.getElementById("przycisk");
+        const swastika = document.getElementById("swastika");
         const audio = document.getElementById("mojaMuzyka");
+        const controls = document.getElementById("controls");
+        const slider = document.getElementById("speedSlider");
+        const valueDisplay = document.getElementById("speedValue");
+        const canvas = document.getElementById("particleCanvas");
+        const ctx = canvas.getContext("2d");
+        const isPopup = !!window.opener;
+        const bgUrl = "https://media.gettyimages.com/id/515240808/photo/benito-mussolini-and-adolf-hitler-watch-a-nazi-parade-staged-for-the-italian-dictatorss-visit.jpg?s=612x612&w=0&k=20&c=snY_4Q3sJqrXlR696yl0T98Pqf9snoSHPgP6299aLFI=";
+        const baseDuration = 2 / 3; // ~1.5 rotations/sec at ×1
+        const gravity = 0.22;
 
-        przycisk.addEventListener("click", () => {
-            // Pokaż obraz
-            obraz.style.display = "block";
+        let multiplier = 1;
+        let particles = [];
 
-            // Ukryj przycisk
-            przycisk.style.display = "none";
+        // Initialize based on popup status
+        if (isPopup) {
+            btn.style.display = "none";
+            controls.style.display = "flex";
+        }
 
-            // Ustaw głośność
-            audio.volume = 1.0;
+        // Function to update animation speed
+        function updateSpeed() {
+            multiplier = parseInt(slider.value) || 1;
+            valueDisplay.textContent = multiplier;
+            let dur = baseDuration / multiplier;
+            dur = Math.max(0.008, dur);
+            swastika.style.animation = 'none';
+            void swastika.offsetWidth; // Trigger reflow
+            swastika.style.animation = `spin ${dur}s linear infinite`;
+        }
 
-            // Odtwórz muzykę
-            audio.play().catch(error => {
-                console.log("Autoplay zablokowany:", error);
+        // Event listener for slider
+        slider.addEventListener('input', updateSpeed);
+
+        // Function to emit particles
+        function emitParticles() {
+            const rect = swastika.getBoundingClientRect();
+            const cx = rect.left + rect.width / 2;
+            const cy = rect.top + rect.height / 2;
+            const count = Math.floor(multiplier / 40) + 1;
+            const power = multiplier / 120 + 0.8;
+
+            for (let i = 0; i < count; i++) {
+                const angle = Math.random() * Math.PI * 2;
+                const spd = (Math.random() * 2.5 + 1) * power;
+                particles.push({
+                    x: cx,
+                    y: cy,
+                    vx: Math.cos(angle) * spd,
+                    vy: Math.sin(angle) * spd,
+                    life: 100 + Math.random() * 80,
+                    size: 1.8 + Math.random() * 3.2
+                });
+            }
+        }
+
+        // Animation loop for particles
+        function animate() {
+            requestAnimationFrame(animate);
+            canvas.width = window.innerWidth;
+            canvas.height = window.innerHeight;
+            ctx.clearRect(0, 0, canvas.width, canvas.height);
+
+            particles.forEach((p, i) => {
+                p.x += p.vx;
+                p.y += p.vy;
+                p.vy += gravity;
+                p.life--;
+
+                if (p.life <= 0) {
+                    particles.splice(i, 1);
+                    return;
+                }
+
+                const alpha = p.life / 180;
+                ctx.globalAlpha = alpha;
+                ctx.fillStyle = "#000000";
+                ctx.beginPath();
+                ctx.arc(p.x, p.y, p.size, 0, Math.PI * 2);
+                ctx.fill();
             });
-        });
-    </script>
 
+            ctx.globalAlpha = 1;
+        }
+
+        // Function to show content and play audio
+        function showAndPlay() {
+            swastika.style.display = "block";
+
+            if (!isPopup) {
+                btn.style.display = "none";
+                controls.style.display = "flex";
+            }
+
+            audio.volume = 1.0;
+            audio.play().catch(e => console.log("Audio play failed:", e));
+
+            const bg = document.createElement('div');
+            Object.assign(bg.style, {
+                position: 'absolute',
+                inset: '0',
+                background: `url('${bgUrl}') center/contain no-repeat`,
+                opacity: '0.35',
+                zIndex: '-1'
+            });
+            document.body.appendChild(bg);
+
+            updateSpeed();
+            animate();
+            setInterval(emitParticles, 40);
+        }
+
+        // Setup based on popup or main window
+        if (isPopup) {
+            showAndPlay();
+            setInterval(emitParticles, 40);
+        } else {
+            btn.addEventListener("click", showAndPlay);
+            document.addEventListener('keydown', e => {
+                if (e.key === 'e') window.close();
+            });
+        }
+    </script>
 </body>
 </html>
