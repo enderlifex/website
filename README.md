@@ -1,1 +1,1 @@
-www
+https://enderlifex.github.io/swastikawebsite/
